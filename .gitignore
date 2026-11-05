@@ -1,0 +1,6 @@
+# Private keys never belong in this repo.
+*.key
+*.pem
+.venv/
+__pycache__/
+.pytest_cache/
