@@ -1,0 +1,22 @@
+# One instance per runner slot: sglang-jit-runner@<slot>, reading
+# /etc/sglang-ci/runner-<slot>.env. Paths and user names are examples.
+[Unit]
+Description=sglang JIT runner loop (%i)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+# A non-root user and the only one that can read KEY_PATH (chmod 600).
+# Mode A: this user can run docker.
+# Mode B: this user has passwordless `sudo -u $RUNNER_USER`, e.g. in sudoers:
+#   sglang-ci ALL=(sglang-runner) NOPASSWD: ALL
+User=sglang-ci
+EnvironmentFile=/etc/sglang-ci/runner-%i.env
+# python3 here must be able to import jwt (pip install -r client/requirements.txt).
+Environment=PATH=/opt/sglang-ci/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/sglang-ci/sglang-ci-runner-kit/client/runner_loop.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

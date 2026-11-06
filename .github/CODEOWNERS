@@ -1,0 +1,11 @@
+# Every change needs an approval from a code owner other than its author.
+# A host key reaches the broker only through a reviewed sync PR in
+# sglang-ci-runner-broker, but review here is the first check.
+# TODO: add a second owner to every line before enabling
+# "Require review from Code Owners"; with one owner, that owner's own PRs
+# can never be approved.
+*                         @AgainstEntropy
+/keys/                    @AgainstEntropy
+/vendors/                 @AgainstEntropy
+/scripts/                 @AgainstEntropy
+/.github/                 @AgainstEntropy
