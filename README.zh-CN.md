@@ -78,7 +78,10 @@ python3 client/jit_client.py keygen --out /etc/sglang-ci/<kid>
 - 不修改已有的密钥文件。
 
 CI 会检查以上几点，以及 kid 的格式和年月、公钥的格式，并打印每个 `.pub` 文件的到期日和 SHA-256。
-请和主机上 `sha256sum <kid>.pub` 的结果比对。之后由 sglang 的 code owner 批准并合入。
+请和主机上 `sha256sum <kid>.pub` 的结果比对。
+在 PR 描述里按模板填好每个 kid 对应的主机：卡数、会跑哪些 label、最多同时开几个 runner，轮换时还要写替换的旧 kid。
+sglang 据此在 broker 里设置这把 key 能用的 labels 和 runner 上限。这些只是上限：每个 runner 实际用哪个 label，
+由主机上的 `RUNNER_LABEL` 决定。之后由 sglang 的 code owner 批准并合入。
 
 **绝不要提交 `.key` 文件。** 一旦提交，即使之后删除，私钥也已经泄露：关掉 PR，
 通知 sglang，用新 kid 重新生成一对密钥。
@@ -87,6 +90,7 @@ CI 会检查以上几点，以及 kid 的格式和年月、公钥的格式，并
 
 合入后，sglang 把公钥同步进 broker 并部署。生效后 sglang 会通知你们，并提供 broker 的基础地址
 （`BROKER_URL`，例如 `https://<broker>`，不带路径）和你们可用的 labels。在此之前发请求会返回 `401 unknown kid`。
+生效后可以用下文“查看排队”返回的 `key_labels` 确认每把 key 能注册哪些 label。
 
 ## 运行循环
 

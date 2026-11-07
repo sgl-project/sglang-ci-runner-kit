@@ -98,7 +98,14 @@ Add the public key, unchanged, as `keys/<vendor>/<kid>.pub`. The PR must:
 
 CI checks all of this, plus the kid format and date and the key format, and
 prints the expiry date and the SHA-256 of each `.pub` file. Compare it with `sha256sum <kid>.pub` on your
-host. An sglang code owner then approves and merges.
+host.
+
+In the PR description, fill in the template's row for each kid: the host's
+card count, the labels it will run, and the most runners it will have at once
+(for a rotation, also the kid it replaces). sglang uses it to set the labels and
+runner limit each key gets in the broker. These are ceilings only: which label
+each runner takes is set by `RUNNER_LABEL` on the host. An sglang code owner
+then approves and merges.
 
 **Never commit a `.key` file.** If you do, the key is exposed even after you
 delete it: close the PR, tell sglang, and generate a new pair under a new kid.
@@ -109,6 +116,8 @@ After merging, sglang syncs the key to the broker and deploys it. sglang will
 tell you when it's live and give you the broker's base URL (`BROKER_URL`, e.g.
 `https://<broker>`, no path) and your labels. Requests before that return
 `401 unknown kid`.
+Once it's live, `key_labels` in [Checking the queue](#checking-the-queue)
+shows the labels each key may register.
 
 ## Running the loop
 
