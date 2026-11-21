@@ -22,7 +22,7 @@ job，机器向 sglang 的 runner 签发服务（broker）申请一份**即时�
 2. sglang review 并合入 PR，再经过一次单独 review 的变更把公钥同步进 broker 并部署。
    部署完成后这把 key 才能用。
 3. 主机用私钥签一个短期 token（60 秒），请求 `<BROKER_URL>/v1/jit/<vendor>`。broker 检查 key、主机名、
-   labels、限流，以及这台主机已有的 runner 数，返回一个 runner 的配置。
+   labels、限流，以及这台主机和整个厂商已有的 runner 数，返回一个 runner 的配置。
 4. runner 跑完一个 job 就消失，循环再去领下一个。
 
 每把 key 能做什么由 broker 决定：labels、主机名、这台主机同时能有多少个 runner、限流、何时过期。
@@ -30,14 +30,14 @@ sglang 可以对某一把 key 单独收紧。请求或 token 里的任何内容�
 
 ## 部署要求
 
-不管用什么来跑 runner（systemd、Kubernetes、Slurm、Jenkins），都要满足这四条：
+不管用什么来跑 runner（systemd、Kubernetes、Slurm、Jenkins），都要满足这三条：
 
-1. **私钥放在不受信代码碰不到的地方**：放在一台不跑 CI job 的 provisioner 上。
+1. **job 里的代码永远碰不到私钥**。CI 会执行公开 PR 里的代码，要当作恶意代码对待。私钥要放在
+   job 的容器之外（下文模式 A），或放在一台不跑 job 的机器上（模式 B）。
 2. **一个 job 一份配置，在全新、隔离的环境里跑**。runner 目录和容器都不能跨 job 复用。
-3. **PR 代码绝不在私钥所在的地方运行**。CI 会执行公开 PR 里的代码，要当作恶意代码对待。
-4. **失败后带随机抖动地退避**。broker 的请求额度由所有厂商共享。`runner_loop.sh` 已经实现了这一点。
+3. **失败后带随机抖动地退避**。broker 的请求额度由所有厂商共享。`runner_loop.sh` 已经实现了这一点。
 
-`runner_loop.sh` 实现了下面两种常见部署方式。其他方式只要满足这四条也可以。例如在 **Slurm** 上：
+`runner_loop.sh` 实现了下面两种常见部署方式。其他方式只要满足这三条也可以。例如在 **Slurm** 上：
 - 私钥不要放在计算节点能看到的共享 NFS 或 `/home` 上；
 - JIT 配置用 `0600` 文件传给 job，不要用 `sbatch --export`（`scontrol show job` 能看到）；
 - 节点会被复用，所以每个 job 都要在新的 enroot/pyxis 或 Apptainer 容器里跑。
@@ -114,7 +114,7 @@ token 有效期 60 秒，broker 只容忍 30 秒时钟偏差。
 | `VENDOR` | 是 | 厂商名，如 `mlu` |
 | `KID` | 是 | 本机 key 的 kid |
 | `KEY_PATH` | 是 | 本机私钥（`<kid>.key`） |
-| `RUNNER_LABEL` | 是 | 如 `mlu-pr`；每个实例只申请这一个 label |
+| `RUNNER_LABEL` | 是 | 如 `mlu-1card`；每个实例只申请这一个 label |
 | `RUNNER_HOST` | 否 | 默认 `hostname -s`；必须等于 kid 里的 `<host>` |
 | `RUNNER_MODE` | 否 | `container`（默认）或 `host` |
 | `CLIENT` | 否 | `jit_client.py` 的路径，默认和脚本同目录 |
@@ -132,7 +132,7 @@ sudo systemctl daemon-reload
 ```
 
 ```bash
-sudo systemctl enable --now sglang-jit-runner@pr1
+sudo systemctl enable --now sglang-jit-runner@slot1
 ```
 
 ## 查看排队
@@ -173,8 +173,9 @@ client/jit_client.py queue --url "$BROKER_URL" --vendor mlu \
 | `403 source ip not allowed` | 出口 IP 不在该厂商的白名单里 |
 | `403 labels not allowed for key ...` | `RUNNER_LABEL` 不在这把 key 的 labels 里 |
 | `403 key <kid> may only register host ...` | `RUNNER_HOST` 和 kid 里的 `<host>` 不一致 |
-| `404` | `BROKER_URL` 里带了路径，或客户端是旧版；改用基础地址和本 repo 的客户端 |
+| `404` | `BROKER_URL` 填错，或没有用本 repo 的客户端 |
 | `429 rate limit exceeded ...` | 超过这把 key 或该厂商的限流；循环会自动退避 |
 | `429 queue read limit exceeded for key <kid>` | 这把 key 每分钟查排队超过 30 次，降低轮询频率 |
-| `429 host <host> already has N runners` | 这台主机的 runner 数已到上限；runner 跑完会释放，从没上线的 runner 大约 15 分钟内会被清理 |
+| `429 host <host> already has N runners ...` | 这台主机的 runner 数已到上限；runner 跑完会释放，从没上线的 runner 大约 25 分钟内会被清理 |
+| `429 vendor <vendor> already has N runners ...` | 你们所有主机加起来已到该厂商的 runner 上限；释放方式同上 |
 | `5xx` | broker 或 GitHub 侧的问题；循环会重试，持续出现请通知 sglang |

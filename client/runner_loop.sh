@@ -22,7 +22,7 @@
 #   VENDOR          the vendor's short name
 #   KID             this host's key id, e.g. <vendor>-host01-2026-11
 #   KEY_PATH        this host's private key (.key from `jit_client.py keygen`)
-#   RUNNER_LABEL    e.g. <vendor>-pr
+#   RUNNER_LABEL    e.g. <vendor>-1card
 # Mode A:  RUNNER_IMAGE, plus DOCKER_ARGS for devices and read-only mounts
 # Mode B:  RUNNER_DIR, a pristine actions/runner install readable by RUNNER_USER;
 #          RUNNER_USER

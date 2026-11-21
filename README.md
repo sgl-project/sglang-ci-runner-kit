@@ -25,8 +25,8 @@ This repo is everything a vendor needs:
    reviewed change and deploys it. Only then does the key work.
 3. The host signs a short-lived token (60 s) with its key and calls
    `<BROKER_URL>/v1/jit/<vendor>`. The broker checks the key, the host name,
-   the labels, the rate limits and how many runners the host already has, and
-   returns a config for one runner.
+   the labels, the rate limits and how many runners the host and your vendor
+   already have, and returns a config for one runner.
 4. The runner runs one job and is gone. The loop asks again.
 
 The broker decides what each key may do: its labels, its host name, how many
@@ -36,19 +36,18 @@ narrow these for a single key. Nothing in your request or token can widen them.
 ## Rules for your setup
 
 Whatever runs your runners (systemd, Kubernetes, Slurm, Jenkins), it must
-follow these four rules:
+follow these three rules:
 
-1. **The private key lives where untrusted code can't reach it**, on a
-   provisioner that runs no CI jobs.
+1. **Job code can never reach the private key.** CI runs code from public pull
+   requests; treat it as hostile. Keep the key outside the job's container
+   (mode A below) or on a machine that runs no jobs (mode B).
 2. **One config per job, in a fresh, isolated environment.** Never reuse a
    runner directory or container across jobs.
-3. **PR code never runs where the key lives.** CI runs code from public pull
-   requests; treat it as hostile.
-4. **Back off with jitter on failure.** The broker's request budget is shared
+3. **Back off with jitter on failure.** The broker's request budget is shared
    by all vendors. `runner_loop.sh` already does this.
 
 `runner_loop.sh` implements two common setups (below). Other setups are fine
-if they keep the four rules. For example, on **Slurm**:
+if they keep the three rules. For example, on **Slurm**:
 - keep the key off shared NFS and `/home` that compute nodes can see;
 - pass the JIT config to the job as a `0600` file, not with
   `sbatch --export` (that shows up in `scontrol show job`);
@@ -142,7 +141,7 @@ clean up, repeat. Run one instance per slot, e.g. with the systemd template in
 | `VENDOR` | yes | your vendor name, e.g. `mlu` |
 | `KID` | yes | this host's kid |
 | `KEY_PATH` | yes | this host's private key (`<kid>.key`) |
-| `RUNNER_LABEL` | yes | e.g. `mlu-pr`; each instance requests this one label |
+| `RUNNER_LABEL` | yes | e.g. `mlu-1card`; each instance requests this one label |
 | `RUNNER_HOST` | no | defaults to `hostname -s`; must equal the `<host>` in the kid |
 | `RUNNER_MODE` | no | `container` (default) or `host` |
 | `CLIENT` | no | path to `jit_client.py`; defaults to the script's directory |
@@ -161,7 +160,7 @@ sudo systemctl daemon-reload
 ```
 
 ```bash
-sudo systemctl enable --now sglang-jit-runner@pr1
+sudo systemctl enable --now sglang-jit-runner@slot1
 ```
 
 ## Checking the queue
@@ -208,8 +207,9 @@ may register, so the only ones this host should start runners for) and `jobs`
 | `403 source ip not allowed` | your egress IP isn't on your vendor's allowlist |
 | `403 labels not allowed for key ...` | `RUNNER_LABEL` isn't one of this key's labels |
 | `403 key <kid> may only register host ...` | `RUNNER_HOST` differs from the `<host>` in the kid |
-| `404` | `BROKER_URL` has a path in it, or an old client; use the base URL and this repo's client |
+| `404` | wrong `BROKER_URL`, or not this repo's client |
 | `429 rate limit exceeded ...` | over this key's or your vendor's rate; the loop backs off by itself |
 | `429 queue read limit exceeded for key <kid>` | more than 30 queue reads a minute from this key; poll less often |
-| `429 host <host> already has N runners` | the host is at its runner limit; it clears as runners finish, and runners that never came online are removed within about 15 minutes |
+| `429 host <host> already has N runners ...` | the host is at its runner limit; it clears as runners finish, and runners that never came online are removed within about 25 minutes |
+| `429 vendor <vendor> already has N runners ...` | all your hosts together are at your vendor's runner limit; it clears the same way |
 | `5xx` | broker or GitHub side; the loop retries, tell sglang if it persists |

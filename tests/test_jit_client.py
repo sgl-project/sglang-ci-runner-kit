@@ -61,7 +61,7 @@ def loop_env(tmp_path, docker_args):
         "VENDOR": "mlu",
         "KID": "mlu-host01-2026-11",
         "KEY_PATH": str(keydir / "k.key"),
-        "RUNNER_LABEL": "mlu-pr",
+        "RUNNER_LABEL": "mlu-1card",
         "RUNNER_HOST": "host01",
         "RUNNER_IMAGE": "img",
         "CLIENT": str(client),
@@ -135,7 +135,7 @@ class _Resp:
         return False
 
 
-@pytest.mark.parametrize("body,method", [(None, "GET"), ({"labels": ["mlu-pr"], "name": "host01"}, "POST")])
+@pytest.mark.parametrize("body,method", [(None, "GET"), ({"labels": ["mlu-1card"], "name": "host01"}, "POST")])
 def test_call_signs_each_request(tmp_path, monkeypatch, body, method):
     jit_client.keygen(str(tmp_path / "mlu-host01-2026-11"))
     seen = []

@@ -13,7 +13,7 @@ keys/<vendor>/<kid>.pub to sglang-ci-runner-kit.
     # <url>/v1/jit/<vendor>.
     jit_client.py request --url https://<broker> --vendor mlu \
         --kid mlu-host01-2026-11 --key /etc/sglang-ci/mlu-host01-2026-11.key \
-        --name host01 --label mlu-pr
+        --name host01 --label mlu-1card
 
     # the vendor's jobs waiting for a runner, as JSON (GET <url>/v1/jit/<vendor>/queue);
     # poll it to size the pool, at most 30 times a minute per key

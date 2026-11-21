@@ -42,7 +42,8 @@ from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-VENDOR_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# Matches the broker: a vendor name is lowercase alphanumeric, no hyphens.
+VENDOR_RE = re.compile(r"^[a-z0-9]+$")
 # Matches the broker: host as in its _HOST_RE, the whole kid within its 64-char _KID_RE.
 HOST_DATE_RE = re.compile(r"^(?P<host>[A-Za-z0-9][A-Za-z0-9.-]{0,39})-(?P<year>20\d\d)-(?P<month>0[1-9]|1[0-2])$")
 MAX_KID = 64
