@@ -128,6 +128,43 @@ def test_tree_errors(repo):
 def test_shipped_tree_passes():
     errors, _ = check_keys.check_tree(REPO)
     assert errors == []
+    errors, rows = check_keys.check_labels(REPO)
+    assert errors == [] and all(labels for _, labels in rows)
+
+
+# --- labels.txt ------------------------------------------------------------------
+
+
+def test_labels_ok(repo):
+    (repo / "vendors/mlu/labels.txt").write_text("# lanes\nmlu-1card\nmlu-8card  # big jobs\n\nmlu-nightly-test\n")
+    errors, rows = check_keys.check_labels(repo)
+    assert errors == []
+    assert rows == [("mlu", ["mlu-1card", "mlu-8card", "mlu-nightly-test"])]
+
+
+def test_labels_errors(repo):
+    (repo / "vendors/mlu/labels.txt").write_text("mlu-1card\nppu-1card\nself-hosted\nmlu-PR\nmlu-1card\n")
+    errors, rows = check_keys.check_labels(repo)
+    assert any(":2: 'ppu-1card' must start with 'mlu-'" in e for e in errors)
+    assert any(":3: 'self-hosted' is a label GitHub assigns" in e for e in errors)
+    assert any(":4: 'mlu-PR' must be lowercase" in e for e in errors)
+    assert any(":5: 'mlu-1card' is listed twice" in e for e in errors)
+    assert rows == [("mlu", ["mlu-1card"])]
+
+
+def test_pr_may_add_keys_and_labels_together(repo):
+    base = head(repo)
+    (repo / "keys/mlu/mlu-host02-2026-11.pub").write_bytes(new_pub())
+    (repo / "vendors/mlu/labels.txt").write_text("mlu-1card\nmlu-2card\n")
+    commit(repo, "add key and a lane")
+    assert check_pr(repo, base, "mlubot") == []
+
+
+def test_pr_labels_only_by_anyone(repo):
+    base = head(repo)
+    (repo / "vendors/ppu/labels.txt").write_text("ppu-linux-cluster\n")
+    commit(repo, "labels")
+    assert check_pr(repo, base, "someone-else") == []
 
 
 # --- PR checks -------------------------------------------------------------------

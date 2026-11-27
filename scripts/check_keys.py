@@ -12,10 +12,13 @@ Tree rules (always):
   - Each file is exactly the PEM public key of one Ed25519 key, as
     `jit_client.py keygen` writes it.
   - No public key appears under two kids.
+  - vendors/<vendor>/labels.txt, if present, lists that vendor's runner labels:
+    one per line, each `<vendor>-...`, lowercase [a-z0-9._-], none of GitHub's
+    own labels (self-hosted, linux, x64, ...), no duplicates.
 
 PR rules (--base). Everything a PR is judged against is read from the base
 commit, so a PR can't vouch for itself; CI also runs this script from the base.
-  - A PR that adds keys changes nothing outside keys/.
+  - A PR that adds keys changes nothing outside keys/ and vendors/*/labels.txt.
   - The PR author is listed in the base's vendors/<vendor>/submitters.txt for
     every vendor it adds a key for.
   - Existing keys are never modified; rotating means a new kid in a new file.
@@ -24,6 +27,7 @@ commit, so a PR can't vouch for itself; CI also runs this script from the base.
     has not expired: the broker counts a key's life from the month in its kid
     and stops it KEY_LIFETIME_MONTHS later.
   - Deleting a key is allowed for anyone: it only narrows access.
+  - Anyone may propose a labels.txt change; the tree rules above check it.
   CODEOWNERS approval is still required for every PR; these checks don't replace it.
 """
 
@@ -49,6 +53,11 @@ HOST_DATE_RE = re.compile(r"^(?P<host>[A-Za-z0-9][A-Za-z0-9.-]{0,39})-(?P<year>2
 MAX_KID = 64
 # Matches the broker: a key works until the start of the 13th month after its kid's month.
 KEY_LIFETIME_MONTHS = 13
+LABELS_PATH_RE = re.compile(r"^vendors/[^/]+/labels\.txt$")
+# Matches the broker's config: a label is lowercase [a-z0-9._-], starts with
+# the vendor's prefix, and is never one of the labels GitHub assigns by itself.
+LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,62}$")
+RESERVED_LABELS = frozenset({"self-hosted", "linux", "windows", "macos", "x64", "x86", "arm", "arm64"})
 KEYGEN_HINT = "generate the pair with `client/jit_client.py keygen` and submit its .pub unchanged"
 
 
@@ -96,6 +105,31 @@ def read_submitters(text: str) -> set[str]:
         if line:
             logins.add(line.lower())
     return logins
+
+
+def check_labels(root: Path) -> tuple[list[str], list[tuple[str, list[str]]]]:
+    """Return (errors, rows of (vendor, labels)) for every vendors/<vendor>/labels.txt."""
+    errors: list[str] = []
+    rows: list[tuple[str, list[str]]] = []
+    for path in sorted((root / "vendors").glob("*/labels.txt")):
+        vendor, rel = path.parent.name, path.relative_to(root).as_posix()
+        labels: list[str] = []
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            label = line.split("#", 1)[0].strip()
+            if not label:
+                continue
+            if not LABEL_RE.match(label):
+                errors.append(f"{rel}:{n}: {label!r} must be lowercase [a-z0-9._-], at most 63 characters")
+            elif label in RESERVED_LABELS:
+                errors.append(f"{rel}:{n}: {label!r} is a label GitHub assigns by itself")
+            elif not label.startswith(f"{vendor}-"):
+                errors.append(f"{rel}:{n}: {label!r} must start with '{vendor}-'")
+            elif label in labels:
+                errors.append(f"{rel}:{n}: {label!r} is listed twice")
+            else:
+                labels.append(label)
+        rows.append((vendor, labels))
+    return errors, rows
 
 
 def check_tree(root: Path) -> tuple[list[str], list[tuple[str, str, str]]]:
@@ -174,9 +208,9 @@ def check_pr(root: Path, base: str, author: str, now: float | None = None) -> li
         if path.startswith("keys/") and status == "M":
             errors.append(f"{path}: existing keys can't be changed; add a new kid instead (see README, Rotating a key)")
     if added:
-        outside = sorted(p for _, p in changes if not p.startswith("keys/"))
+        outside = sorted(p for _, p in changes if not p.startswith("keys/") and not LABELS_PATH_RE.match(p))
         if outside:
-            errors.append(f"a PR that adds keys may only change keys/; also changed: {', '.join(outside)}")
+            errors.append(f"a PR that adds keys may only change keys/ and labels.txt; also changed: {', '.join(outside)}")
     past_paths, past_contents = history_keys(root, base) if added else (set(), set())
     for path in added:
         parts = path.split("/")
@@ -221,16 +255,21 @@ def main() -> int:
     root = Path(args.root)
 
     errors, rows = check_tree(root)
+    label_errors, label_rows = check_labels(root)
+    errors += label_errors
     if args.base:
         errors += check_pr(root, args.base, args.author)
 
     table = ["| key | host | expires | sha256 of the .pub file |", "|---|---|---|---|"]
     table += [f"| `{p}` | `{h}` | {kid_expiry(Path(p).stem)} | `{d}` |" for p, h, d in rows]
-    print("\n".join(table))
+    labels_table = ["| vendor | labels |", "|---|---|"]
+    labels_table += [f"| {v} | {', '.join(f'`{l}`' for l in ls) or '-'} |" for v, ls in label_rows]
+    print("\n".join(table) + "\n\n" + "\n".join(labels_table))
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a") as f:
             f.write("### Registered host keys\n\n" + "\n".join(table) + "\n")
+            f.write("\n### Runner labels\n\n" + "\n".join(labels_table) + "\n")
             if errors:
                 f.write("\n### Errors\n\n" + "\n".join(f"- {e}" for e in errors) + "\n")
     for e in errors:

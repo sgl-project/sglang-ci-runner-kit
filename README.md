@@ -16,6 +16,7 @@ This repo is everything a vendor needs:
 | `examples/systemd/` | a systemd unit and env files for both modes |
 | `keys/<vendor>/<kid>.pub` | the registered public key of each vendor host |
 | `vendors/<vendor>/submitters.txt` | GitHub accounts allowed to submit keys for that vendor |
+| `vendors/<vendor>/labels.txt` | the runner labels that vendor's keys may register |
 | `docs/design.md` | how the broker and the runners fit together, and why |
 
 ## How it works
@@ -30,9 +31,10 @@ This repo is everything a vendor needs:
    already have, and returns a config for one runner.
 4. The runner runs one job and is gone. The loop asks again.
 
-The broker decides what each key may do: its labels, its host name, how many
-runners its host may have at once, its rate, and when it expires. sglang can
-narrow these for a single key. Nothing in your request or token can widen them.
+The broker decides what each key may do: its labels (your
+`vendors/<vendor>/labels.txt`), its host name, how many runners its host may
+have at once, its rate, and when it expires. sglang can narrow these for a
+single key. Nothing in your request or token can widen them.
 [docs/design.md](docs/design.md) explains the design.
 
 ## Rules for your setup
@@ -94,7 +96,7 @@ for example `mlu-host01-2026-11`:
 
 Add the public key, unchanged, as `keys/<vendor>/<kid>.pub`. The PR must:
 - be opened by an account in `vendors/<vendor>/submitters.txt`;
-- change nothing outside `keys/`;
+- change nothing outside `keys/` and `vendors/<vendor>/labels.txt`;
 - not modify an existing key file.
 
 CI checks all of this, plus the kid format and date and the key format, and
@@ -105,8 +107,10 @@ In the PR description, fill in the template's row for each kid: the host's
 card count, the labels it will run, and the most runners it will have at once
 (for a rotation, also the kid it replaces). sglang uses it to set the labels and
 runner limit each key gets in the broker. These are ceilings only: which label
-each runner takes is set by `RUNNER_LABEL` on the host. An sglang code owner
-then approves and merges.
+each runner takes is set by `RUNNER_LABEL` on the host. If a host needs a lane
+that isn't in your `labels.txt` yet, add it in the same PR (see
+[Changing your labels](#changing-your-labels)). An sglang code owner then
+approves and merges.
 
 **Never commit a `.key` file.** If you do, the key is exposed even after you
 delete it: close the PR, tell sglang, and generate a new pair under a new kid.
@@ -119,6 +123,26 @@ tell you when it's live and give you the broker's base URL (`BROKER_URL`, e.g.
 `401 unknown kid`.
 Once it's live, `key_labels` in [Checking the queue](#checking-the-queue)
 shows the labels each key may register.
+
+## Changing your labels
+
+`vendors/<vendor>/labels.txt` lists the runner labels your keys may register,
+one per line. Name a lane by what a job needs (`mlu-1card`, `mlu-8card`), not
+by PR vs nightly, unless nightly needs machines of its own. CI checks that each
+label starts with `<vendor>-`, is lowercase `[a-z0-9._-]`, and isn't one of
+GitHub's own labels (`self-hosted`, `linux`, `x64`, ...).
+
+Change it by PR here. Anyone may open one; an sglang code owner approves it,
+and the change works once sglang syncs it into the broker and deploys. To move
+jobs to a new lane without leaving any queued:
+
+1. Add the new label here and wait until sglang says it's live.
+2. Point the sglang workflow at it, by PR to sglang. Always name the group:
+   `runs-on: {group: <vendor>-ci-runners, labels: <label>}`, so only your
+   runners can take the job.
+3. Switch `RUNNER_LABEL` on your hosts. To avoid a gap, run some slots on each
+   label until the workflow change has merged.
+4. Remove the old label here.
 
 ## Running the loop
 

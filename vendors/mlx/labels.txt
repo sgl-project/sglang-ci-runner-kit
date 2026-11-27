@@ -1,0 +1,6 @@
+# Runner labels for mlx: one per line; '#' starts a comment.
+# Each label starts with 'mlx-' and names a lane by the resources a job needs.
+# The broker lets mlx's keys register only these labels (sglang may narrow a key).
+# Change it by PR; the label works once the broker syncs and deploys it.
+mlx-pr
+mlx-nightly
