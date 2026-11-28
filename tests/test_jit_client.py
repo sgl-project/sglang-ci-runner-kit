@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import serialization
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "client"))
 sys.path.insert(0, str(ROOT / "scripts"))
-import check_keys  # noqa: E402
+import check_kit  # noqa: E402
 import jit_client  # noqa: E402
 
 
@@ -23,7 +23,7 @@ def test_keygen_output_passes_the_key_check(tmp_path):
     key = Path(f"{out}.key")
     pub = Path(f"{out}.pub")
     assert stat.S_IMODE(key.stat().st_mode) == 0o600
-    check_keys.check_pem(pub.read_bytes())  # what keygen writes is what the repo accepts
+    check_kit.check_pem(pub.read_bytes())  # what keygen writes is what the repo accepts
 
 
 def test_keygen_refuses_to_overwrite(tmp_path):

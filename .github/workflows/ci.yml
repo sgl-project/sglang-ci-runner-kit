@@ -20,7 +20,7 @@ jobs:
           persist-credentials: false
       - name: Install
         run: python3 -m venv /tmp/venv && /tmp/venv/bin/pip install -q -r requirements-dev.txt
-      - name: Check keys
+      - name: Check keys and labels
         env:
           EVENT: ${{ github.event_name }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -30,14 +30,16 @@ jobs:
             # merged onto. Run the checker as it is on the base, so a PR can't
             # weaken the check that judges it.
             base=$(git rev-parse HEAD^1)
-            if ! git show "$base:scripts/check_keys.py" > /tmp/check_keys.py; then
+            # Bases from before the rename still call the checker check_keys.py.
+            if ! git show "$base:scripts/check_kit.py" > /tmp/check_kit.py 2>/dev/null &&
+              ! git show "$base:scripts/check_keys.py" > /tmp/check_kit.py 2>/dev/null; then
               # Only before the checker first lands on main; a PR can't cause this.
               echo "::notice::base has no checker yet; using the PR's own"
-              cp scripts/check_keys.py /tmp/check_keys.py
+              cp scripts/check_kit.py /tmp/check_kit.py
             fi
-            /tmp/venv/bin/python /tmp/check_keys.py --base "$base" --author "$PR_AUTHOR"
+            /tmp/venv/bin/python /tmp/check_kit.py --base "$base" --author "$PR_AUTHOR"
           else
-            /tmp/venv/bin/python scripts/check_keys.py
+            /tmp/venv/bin/python scripts/check_kit.py
           fi
 
   test:

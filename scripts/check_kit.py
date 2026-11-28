@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check the vendor host keys in this repo.
+"""Check the vendor host keys and runner labels in this repo.
 
-    check_keys.py                                # check the whole tree
-    check_keys.py --base <commit> --author <gh>  # also check a PR against its base
+    check_kit.py                                # check the whole tree
+    check_kit.py --base <commit> --author <gh>  # also check a PR against its base
 
 Tree rules (always):
   - keys/ holds only keys/<vendor>/<kid>.pub (plus .gitkeep), and every <vendor>
