@@ -15,6 +15,7 @@ job，机器向 sglang 的 runner 签发服务（broker）申请一份**即时�
 | `examples/systemd/` | 两种模式的 systemd unit 和 env 文件示例 |
 | `keys/<vendor>/<kid>.pub` | 已登记的各厂商主机公钥 |
 | `vendors/<vendor>/submitters.txt` | 可以替该厂商提交公钥的 GitHub 账号 |
+| `vendors/<vendor>/labels.txt` | 该厂商的 key 能注册的 runner label |
 | `docs/design.md` | broker 和 runner 如何配合，以及为什么这样设计（英文） |
 
 ## 工作方式
@@ -26,7 +27,7 @@ job，机器向 sglang 的 runner 签发服务（broker）申请一份**即时�
    labels、限流，以及这台主机和整个厂商已有的 runner 数，返回一个 runner 的配置。
 4. runner 跑完一个 job 就消失，循环再去领下一个。
 
-每把 key 能做什么由 broker 决定：labels、主机名、这台主机同时能有多少个 runner、限流、何时过期。
+每把 key 能做什么由 broker 决定：labels（即你们的 `vendors/<vendor>/labels.txt`）、主机名、这台主机同时能有多少个 runner、限流、何时过期。
 sglang 可以对某一把 key 单独收紧。请求或 token 里的任何内容都无法放宽。
 设计说明见 [docs/design.md](docs/design.md)（英文）。
 
@@ -76,14 +77,15 @@ python3 client/jit_client.py keygen --out /etc/sglang-ci/<kid>
 
 把公钥原样放到 `keys/<vendor>/<kid>.pub`。这个 PR 必须：
 - 由 `vendors/<vendor>/submitters.txt` 里的账号发起；
-- 只改 `keys/` 下的文件；
+- 只改 `keys/` 下的文件和 `vendors/<vendor>/labels.txt`；
 - 不修改已有的密钥文件。
 
 CI 会检查以上几点，以及 kid 的格式和年月、公钥的格式，并打印每个 `.pub` 文件的到期日和 SHA-256。
 请和主机上 `sha256sum <kid>.pub` 的结果比对。
 在 PR 描述里按模板填好每个 kid 对应的主机：卡数、会跑哪些 label、最多同时开几个 runner，轮换时还要写替换的旧 kid。
 sglang 据此在 broker 里设置这把 key 能用的 labels 和 runner 上限。这些只是上限：每个 runner 实际用哪个 label，
-由主机上的 `RUNNER_LABEL` 决定。之后由 sglang 的 code owner 批准并合入。
+由主机上的 `RUNNER_LABEL` 决定。如果主机要跑的 lane 还不在 `labels.txt` 里，在同一个 PR 里加上
+（见下文“修改 labels”）。之后由 sglang 的 code owner 批准并合入。
 
 **绝不要提交 `.key` 文件。** 一旦提交，即使之后删除，私钥也已经泄露：关掉 PR，
 通知 sglang，用新 kid 重新生成一对密钥。
@@ -93,6 +95,22 @@ sglang 据此在 broker 里设置这把 key 能用的 labels 和 runner 上限�
 合入后，sglang 把公钥同步进 broker 并部署。生效后 sglang 会通知你们，并提供 broker 的基础地址
 （`BROKER_URL`，例如 `https://<broker>`，不带路径）和你们可用的 labels。在此之前发请求会返回 `401 unknown kid`。
 生效后可以用下文“查看排队”返回的 `key_labels` 确认每把 key 能注册哪些 label。
+
+## 修改 labels
+
+`vendors/<vendor>/labels.txt` 列出你们的 key 能注册的 runner label，每行一个。按 job 需要的资源给 lane 命名
+（`mlu-1card`、`mlu-8card`），而不是按 PR 和 nightly 区分，除非 nightly 需要单独的机器。CI 会检查每个 label：
+以 `<vendor>-` 开头，只用小写 `[a-z0-9._-]`，并且不是 GitHub 自带的 label（`self-hosted`、`linux`、`x64` 等）。
+
+通过本 repo 的 PR 修改。和提交公钥一样，增加 label 的 PR 要由 `submitters.txt` 里的账号发起；删除 label 谁都可以。
+sglang 的 code owner 批准合入，sglang 把它同步进 broker 并部署后才生效。
+要把 job 换到新的 lane、又不让 job 排队落空，按这个顺序：
+
+1. 在这里加上新 label，等 sglang 通知生效。
+2. 向 sglang 提 PR，把 workflow 指向新 label。`runs-on` 一定要写上 group：
+   `runs-on: {group: <vendor>-ci-runners, labels: <label>}`，这样只有你们的 runner 能接这个 job。
+3. 在主机上切换 `RUNNER_LABEL`。为了不留空档，在 workflow 的改动合入前，可以让一部分槽位跑新 label、一部分跑旧 label。
+4. 在这里删掉旧 label。
 
 ## 运行循环
 
