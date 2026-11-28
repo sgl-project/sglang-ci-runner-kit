@@ -132,8 +132,10 @@ by PR vs nightly, unless nightly needs machines of its own. CI checks that each
 label starts with `<vendor>-`, is lowercase `[a-z0-9._-]`, and isn't one of
 GitHub's own labels (`self-hosted`, `linux`, `x64`, ...).
 
-Change it by PR here. Anyone may open one; an sglang code owner approves it,
-and the change works once sglang syncs it into the broker and deploys. To move
+Change it by PR here. Adding a label takes an account in your
+`submitters.txt`, as adding a key does; anyone may remove one. An sglang code
+owner approves it, and the change works once sglang syncs it into the broker
+and deploys. To move
 jobs to a new lane without leaving any queued:
 
 1. Add the new label here and wait until sglang says it's live.

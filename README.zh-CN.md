@@ -102,7 +102,8 @@ sglang 据此在 broker 里设置这把 key 能用的 labels 和 runner 上限�
 （`mlu-1card`、`mlu-8card`），而不是按 PR 和 nightly 区分，除非 nightly 需要单独的机器。CI 会检查每个 label：
 以 `<vendor>-` 开头，只用小写 `[a-z0-9._-]`，并且不是 GitHub 自带的 label（`self-hosted`、`linux`、`x64` 等）。
 
-通过本 repo 的 PR 修改。任何人都可以发起，sglang 的 code owner 批准合入；sglang 把它同步进 broker 并部署后才生效。
+通过本 repo 的 PR 修改。和提交公钥一样，增加 label 的 PR 要由 `submitters.txt` 里的账号发起；删除 label 谁都可以。
+sglang 的 code owner 批准合入，sglang 把它同步进 broker 并部署后才生效。
 要把 job 换到新的 lane、又不让 job 排队落空，按这个顺序：
 
 1. 在这里加上新 label，等 sglang 通知生效。

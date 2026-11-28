@@ -160,11 +160,32 @@ def test_pr_may_add_keys_and_labels_together(repo):
     assert check_pr(repo, base, "mlubot") == []
 
 
-def test_pr_labels_only_by_anyone(repo):
+def test_pr_adding_labels_needs_a_submitter(repo):
     base = head(repo)
     (repo / "vendors/ppu/labels.txt").write_text("ppu-linux-cluster\n")
     commit(repo, "labels")
+    assert check_pr(repo, base, "ppu-dev") == []
+    errors = check_pr(repo, base, "mlubot")
+    assert len(errors) == 1 and "adds ppu-linux-cluster, but @mlubot is not in vendors/ppu/submitters.txt" in errors[0]
+
+
+def test_pr_removing_labels_by_anyone(repo):
+    (repo / "vendors/mlu/labels.txt").write_text("mlu-1card\nmlu-8card\n")
+    base = commit(repo, "lanes")
+    (repo / "vendors/mlu/labels.txt").write_text("# only one lane now\nmlu-1card\n")
+    commit(repo, "drop a lane")
     assert check_pr(repo, base, "someone-else") == []
+    (repo / "vendors/mlu/labels.txt").unlink()
+    commit(repo, "drop all")
+    assert check_pr(repo, base, "someone-else") == []
+
+
+def test_pr_labels_for_vendor_not_onboarded(repo):
+    base = head(repo)
+    (repo / "vendors/acme").mkdir()
+    (repo / "vendors/acme/labels.txt").write_text("acme-1\n")
+    commit(repo, "labels")
+    assert any("vendor 'acme' is not onboarded" in e for e in check_pr(repo, base, "acme-dev"))
 
 
 # --- PR checks -------------------------------------------------------------------

@@ -27,7 +27,8 @@ commit, so a PR can't vouch for itself; CI also runs this script from the base.
     has not expired: the broker counts a key's life from the month in its kid
     and stops it KEY_LIFETIME_MONTHS later.
   - Deleting a key is allowed for anyone: it only narrows access.
-  - Anyone may propose a labels.txt change; the tree rules above check it.
+  - Adding a label to vendors/<vendor>/labels.txt takes an author listed in the
+    base's submitters.txt for that vendor; removing one is allowed for anyone.
   CODEOWNERS approval is still required for every PR; these checks don't replace it.
 """
 
@@ -105,6 +106,12 @@ def read_submitters(text: str) -> set[str]:
         if line:
             logins.add(line.lower())
     return logins
+
+
+def parse_labels(text: str) -> list[str]:
+    """The labels in a labels.txt: one per line, '#' starts a comment."""
+    labels = [line.split("#", 1)[0].strip() for line in text.splitlines()]
+    return [label for label in labels if label]
 
 
 def check_labels(root: Path) -> tuple[list[str], list[tuple[str, list[str]]]]:
@@ -211,6 +218,27 @@ def check_pr(root: Path, base: str, author: str, now: float | None = None) -> li
         outside = sorted(p for _, p in changes if not p.startswith("keys/") and not LABELS_PATH_RE.match(p))
         if outside:
             errors.append(f"a PR that adds keys may only change keys/ and labels.txt; also changed: {', '.join(outside)}")
+    for status, path in changes:
+        if status == "D" or not LABELS_PATH_RE.match(path):
+            continue
+        vendor = path.split("/")[1]
+        try:
+            before = set(parse_labels(git(root, "show", f"{base}:{path}")))
+        except subprocess.CalledProcessError:
+            before = set()
+        new = sorted(set(parse_labels((root / path).read_text())) - before)
+        if not new:
+            continue  # only removals or comments: anyone may narrow
+        try:
+            submitters = read_submitters(git(root, "show", f"{base}:vendors/{vendor}/submitters.txt"))
+        except subprocess.CalledProcessError:
+            errors.append(f"{path}: vendor {vendor!r} is not onboarded on the base branch")
+            continue
+        if author.lower() not in submitters:
+            errors.append(
+                f"{path}: adds {', '.join(new)}, but @{author} is not in vendors/{vendor}/submitters.txt; "
+                f"only the vendor's submitters add labels (anyone may remove them)"
+            )
     past_paths, past_contents = history_keys(root, base) if added else (set(), set())
     for path in added:
         parts = path.split("/")
