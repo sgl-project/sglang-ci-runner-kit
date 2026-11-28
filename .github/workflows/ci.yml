@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  keys:
+  kit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -30,9 +30,7 @@ jobs:
             # merged onto. Run the checker as it is on the base, so a PR can't
             # weaken the check that judges it.
             base=$(git rev-parse HEAD^1)
-            # Bases from before the rename still call the checker check_keys.py.
-            if ! git show "$base:scripts/check_kit.py" > /tmp/check_kit.py 2>/dev/null &&
-              ! git show "$base:scripts/check_keys.py" > /tmp/check_kit.py 2>/dev/null; then
+            if ! git show "$base:scripts/check_kit.py" > /tmp/check_kit.py; then
               # Only before the checker first lands on main; a PR can't cause this.
               echo "::notice::base has no checker yet; using the PR's own"
               cp scripts/check_kit.py /tmp/check_kit.py
